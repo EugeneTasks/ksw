@@ -1,0 +1,13 @@
+Package: myshortcut
+Version: 1.0
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: -
+#Depends: ufw, libnotify-bin, dbus, gnome-session, gnome-shell, dbus-x11, notification-daemon, dunst
+Description: A script to add a custom VPN Kill Switch and notify-send shortcut
+ This package installs a script that:
+  - Adds a custom keyboard shortcut for notify-send.
+  - Configures a VPN Kill Switch (UFW-based) for enhanced security.
+  - Notifies the user when the VPN connection drops.
+  - Automatically modifies OpenVPN configuration files to include a connection drop handler.
