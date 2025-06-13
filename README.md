@@ -20,12 +20,6 @@
      ```
    - Or download the prebuilt `killswitch.deb`.
 
-2. **Install dependencies:**
-   ```sh
-   sudo apt-get update
-   sudo apt-get install gnome-session dbus-x11 dunst openvpn ufw
-   ```
-
 3. **Install the package:**
    ```sh
    sudo dpkg -i killswitch.deb
