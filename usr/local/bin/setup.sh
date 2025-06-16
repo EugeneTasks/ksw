@@ -137,18 +137,15 @@ cat > /usr/local/bin/killswitch-notify.sh << EOL
 
 STATUS_MESSAGE="Kill Switch successfully activated."
 STATUS_ICON="network-vpn"
-
 if ! ufw status | grep -q "Status: active"; then
     STATUS_MESSAGE="Kill Switch failed to activate!"
     STATUS_ICON="network-error"
 fi
 
-# Attempt to find the logged-in user
-ACTIVE_USER=\$(who | awk '{print \$1}' | head -n 1)
+# Send the notification
+ACTIVE_USER=$(loginctl list-sessions | awk 'NR==2 {print $3}')
 if [ -n "\$ACTIVE_USER" ]; then
-    DISPLAY=\$(ps aux | grep -m1 -E "Xorg|wayland" | awk '{print \$12}')
-    DBUS_SESSION_BUS=\$(grep -z DBUS_SESSION_BUS_ADDRESS /proc/\$(pgrep -u \$ACTIVE_USER gnome-session | head -n 1)/environ | cut -d= -f2-)
-    su \$ACTIVE_USER -c "DISPLAY=\$DISPLAY DBUS_SESSION_BUS=\$DBUS_SESSION_BUS notify-send -u critical -i \$STATUS_ICON '\$STATUS_MESSAGE'"
+    DISPLAY=:0 su $ACTIVE_USER -c "notify-send -u critical -i \"$STATUS_ICON\" \"$STATUS_MESSAGE\""
 fi
 EOL
 
@@ -208,7 +205,9 @@ INSTRUCTIONS="\n\n🎉 Installation complete! 🎉\n
 Three scripts have been created:
 1. /usr/local/bin/killswitch-on.sh - to activate the protection.
 2. /usr/local/bin/killswitch-off.sh - to deactivate the protection.
-3. /etc/openvpn/vpn-disconnected.sh - to send a notification on connection drop (called automatically).
+3. /usr/local/bin/killswitch-notify.sh - to send a notification about the Kill Switch status.
+4. /etc/openvpn/vpn-disconnected.sh - to send a notification on connection drop (called automatically).
+5. Systemd services have been created to run the Kill Switch on boot and send notifications (killswitch.service, killswitch-notify.service).
 
 --- How to use ---
 1. Reconnect to your VPN using the aforementioned '$OVPN_FILE' file, which has been modified by this script.
@@ -221,29 +220,6 @@ Three scripts have been created:
    sudo /usr/local/bin/killswitch-off.sh
    Or set up a keyboard shortcut for 'sudo /usr/local/bin/killswitch-off.sh'
 
-IMPORTANT: Always deactivate the Kill Switch before restarting or shutting down, otherwise you will not have internet access after the system starts.
-If you forget to turn off the Kill Switch at the end of your session, simply deactivate it after restarting."
+IMPORTANT: If you don't have a internet connection after restarting your computer, deactivate the Kill Switch first."
 
 echo -e "$INSTRUCTIONS"
-
-# --- Commented out section from original script ---
-
-# --- Determining network parameters ---
-#ACTIVE_INTERFACE=$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)' | head -n1)
-#LOCAL_GATEWAY_IP=$(ip r | grep default | awk '{print $3}')
-#LOCAL_NETWORK=$(ip -o -f inet addr show | awk '/scope global/ {print $4}' | head -n1)
-
-#if [ -z "$ACTIVE_INTERFACE" ]; then #|| [ -z "$LOCAL_NETWORK" ]
-#    echo "Error: Could not determine the active network interface." #or the local network
-#    exit 1
-#fi
-
-#echo "Detected network parameters: Interface $ACTIVE_INTERFACE" #, Local Network $LOCAL_NETWORK
-
-# Allow traffic on the local network
-#ufw allow out on $ACTIVE_INTERFACE to $LOCAL_NETWORK
-#ufw allow in on $ACTIVE_INTERFACE from $LOCAL_NETWORK
-
-# Allow traffic to DNS servers (example for Google DNS, can be replaced)
-#ufw allow out to 8.8.8.8 port 53
-#ufw allow out to 8.8.4.4 port 53
