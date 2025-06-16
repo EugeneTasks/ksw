@@ -130,11 +130,70 @@ if [ -n "\$ACTIVE_USER" ]; then
 fi
 EOL
 
+# --- Creating the Notification Script ---
+cat > /usr/local/bin/killswitch-notify.sh << EOL
+#!/bin/bash
+# This script sends a notification about the Kill Switch status.
+
+STATUS_MESSAGE="Kill Switch successfully activated."
+STATUS_ICON="network-vpn"
+
+if ! ufw status | grep -q "Status: active"; then
+    STATUS_MESSAGE="Kill Switch failed to activate!"
+    STATUS_ICON="network-error"
+fi
+
+# Attempt to find the logged-in user
+ACTIVE_USER=\$(who | awk '{print \$1}' | head -n 1)
+if [ -n "\$ACTIVE_USER" ]; then
+    DISPLAY=\$(ps aux | grep -m1 -E "Xorg|wayland" | awk '{print \$12}')
+    DBUS_SESSION_BUS=\$(grep -z DBUS_SESSION_BUS_ADDRESS /proc/\$(pgrep -u \$ACTIVE_USER gnome-session | head -n 1)/environ | cut -d= -f2-)
+    su \$ACTIVE_USER -c "DISPLAY=\$DISPLAY DBUS_SESSION_BUS=\$DBUS_SESSION_BUS notify-send -u critical -i \$STATUS_ICON '\$STATUS_MESSAGE'"
+fi
+EOL
+
 
 # --- Making the scripts executable ---
 chmod +x /usr/local/bin/killswitch-on.sh
 chmod +x /usr/local/bin/killswitch-off.sh
 chmod +x /etc/openvpn/vpn-disconnected.sh
+chmod +x /usr/local/bin/killswitch-notify.sh
+
+# --- Setting up Systemd Services ---
+cat > /etc/systemd/system/killswitch.service << EOL
+[Unit]
+Description=Enable VPN Kill Switch on Boot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/killswitch-on.sh
+User=root
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+cat > /etc/systemd/system/killswitch-notify.service << EOL
+[Unit]
+Description=Send notification about VPN Kill Switch status
+After=graphical.target
+Requires=graphical.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/killswitch-notify.sh
+
+[Install]
+WantedBy=default.target
+EOL
+
+# Reload and enable the services
+systemctl daemon-reload
+systemctl enable killswitch.service
+systemctl enable killswitch-notify.service
 
 # --- Modifying the .ovpn file ---
 # Check if the line has already been added
