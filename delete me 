@@ -1,0 +1,52 @@
+gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/' , '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/']"
+
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/ name 'Send Notification'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/ command "sudo /usr/local/bin/killswitch-on.sh"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/ binding '<Control><Super>N'
+
+
+gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings
+
+
+#!/bin/bash
+
+# Получить текущие пользовательские шорткаты
+current_shortcuts=$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings)
+
+# Если массив пуст, создаем новый массив
+if [[ $current_shortcuts == "@as []" ]]; then
+    current_shortcuts="[]"
+fi
+
+# Определить индекс следующего шортката
+index=$(echo "$current_shortcuts" | grep -o 'custom[0-9]' | grep -o '[0-9]*' | sort -n | tail -1)
+if [[ -z $index ]]; then
+    index=0
+else
+    index=$((index + 1))
+fi
+
+# Пути для двух новых шорткатов
+new_shortcut1="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom$index/"
+new_shortcut2="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom$((index + 1))/"
+
+# Обновить массив шорткатов
+updated_shortcuts=$(echo "$current_shortcuts" | sed "s|]$|, '$new_shortcut1', '$new_shortcut2']|")
+
+# Применить обновленный список шорткатов
+gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "$updated_shortcuts"
+
+# Добавить первый шорткат (killswitch-on)
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$new_shortcut1 name 'Killswitch On'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$new_shortcut1 command "sudo /usr/local/bin/killswitch-on.sh"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$new_shortcut1 binding '<Control><Super>N'
+
+# Добавить второй шорткат (killswitch-off)
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$new_shortcut2 name 'Killswitch Off'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$new_shortcut2 command "sudo /usr/local/bin/killswitch-off.sh"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$new_shortcut2 binding '<Control><Super>F'
+
+# Вывод результата
+echo "Новые шорткаты успешно добавлены:"
+echo "1. Killswitch On: Ctrl+Super+O"
+echo "2. Killswitch Off: Ctrl+Super+P"
