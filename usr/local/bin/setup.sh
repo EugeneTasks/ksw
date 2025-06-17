@@ -134,18 +134,21 @@ EOL
 cat > /usr/local/bin/killswitch-notify.sh << EOL
 #!/bin/bash
 # This script sends a notification about the Kill Switch status.
-
-STATUS_MESSAGE="Kill Switch successfully activated."
-STATUS_ICON="network-vpn"
-if ! ufw status | grep -q "Status: active"; then
-    STATUS_MESSAGE="Kill Switch failed to activate!"
-    STATUS_ICON="network-error"
-fi
-
-# Send the notification
 ACTIVE_USER=$(loginctl list-sessions | awk 'NR==2 {print $3}')
+    
 if [ -n "\$ACTIVE_USER" ]; then
-    DISPLAY=:0 su $ACTIVE_USER -c "notify-send -u critical -i \"$STATUS_ICON\" \"$STATUS_MESSAGE\""
+    # Check Kill Switch status
+    if sudo ufw status verbose | grep -q "Default:.*deny (incoming).*deny (outgoing)"; then
+        MESSAGE="Kill Switch is ACTIVE. All traffic is blocked."
+        ICON="network-warning"
+    else
+        MESSAGE="WARNING: Kill Switch is NOT active!"
+        ICON="network-warning"
+    fi
+    DISPLAY=:0 su \$ACTIVE_USER -c "notify-send -u critical -i '\$ICON' '\$MESSAGE'"
+    # Log the notification
+    LOG_FILE="/var/log/killswitch-notify.log"
+    echo "$(date): Notification sent to user \$ACTIVE_USER" >> \$LOG_FILE
 fi
 EOL
 
@@ -182,6 +185,7 @@ Requires=graphical.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/killswitch-notify.sh
+RemainAfterExit=no
 
 [Install]
 WantedBy=default.target
