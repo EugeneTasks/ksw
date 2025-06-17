@@ -204,120 +204,120 @@ if ! grep -q "down /etc/openvpn/vpn-disconnected.sh" "$OVPN_FILE"; then
 fi
 
 USER_TO_ALLOW=$(who | awk '{print $1}' | head -n 1)
+USER_ID=$(id -u "$USER_TO_ALLOW")
 echo "$USER_TO_ALLOW"
 
-# --- Adding shortcuts for the scripts ---
-# Check if a shortcut with the specified name already exists
-shortcut_exists() {
-    local shortcut_name="$1"
-    local path="$2"
-    sudo -u "$USER_TO_ALLOW" gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$path" name 2>/dev/null | grep -q "$shortcut_name"
+run_gsettings() {
+    sudo -u "$USER_TO_ALLOW" \
+        DISPLAY=:0 \
+        XDG_RUNTIME_DIR="/run/user/$USER_ID" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus" \
+        "$@"
 }
 
-# Get the current list of custom shortcuts for the specified user
-current_shortcuts=$(sudo -u "$USER_TO_ALLOW" gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings)
+echo "=== Setting up shortcuts ==="
 
-# Remove @as prefix and clean the format
-current_shortcuts=$(echo "$current_shortcuts" | sed 's/@as //')
+current=$(run_gsettings gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings)
+echo "Current shortcuts: $current"
 
-# Flags to check the existence of shortcuts
 skip_on=0
 skip_off=0
 
-# Check if "Killswitch On" or "Killswitch Off" already exists
-if ! echo "$current_shortcuts" | grep -q "^\[\]$"; then
-    for path in $(echo "$current_shortcuts" | grep -o "'/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom[0-9]*/'"); do
-        # Remove quotes from path
+if [ "$current" != "@as []" ] && [ "$current" != "[]" ]; then
+    echo "Checking existing shortcuts for duplicates..."
+    
+    for path in $(echo "$current" | grep -o "'/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom[0-9]*/'"); do
         clean_path=$(echo "$path" | sed "s/'//g")
-        if shortcut_exists "Killswitch On" "$clean_path"; then
-            echo "Shortcut 'Killswitch On' already exists. Skipping creation."
+        
+        name=$(run_gsettings gsettings get "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$clean_path" name 2>/dev/null)
+        
+        if [ "$name" = "'Killswitch On'" ]; then
+            echo "Found existing 'Killswitch On' shortcut at $clean_path"
             skip_on=1
-        fi
-        if shortcut_exists "Killswitch Off" "$clean_path"; then
-            echo "Shortcut 'Killswitch Off' already exists. Skipping creation."
+        elif [ "$name" = "'Killswitch Off'" ]; then
+            echo "Found existing 'Killswitch Off' shortcut at $clean_path"
             skip_off=1
         fi
     done
 fi
 
-# If both shortcuts exist, skip creation
-if [ "$skip_on" -eq 1 ] && [ "$skip_off" -eq 1 ]; then
-    echo "Both shortcuts already exist. Skipping shortcuts creation."
+if [ "$current" = "@as []" ] || [ "$current" = "[]" ]; then
+    index=0
 else
-    # Determine the index for the next shortcut
-    if echo "$current_shortcuts" | grep -q "^\[\]$"; then
+    highest=$(echo "$current" | grep -o 'custom[0-9]\+' | grep -o '[0-9]\+' | sort -n | tail -1)
+    if [ -z "$highest" ]; then
         index=0
     else
-        index=$(echo "$current_shortcuts" | grep -o "custom[0-9]*" | grep -o "[0-9]*" | sort -n | tail -n 1)
-        if [ -z "$index" ]; then
-            index=0
-        else
-            index=$((index + 1))
-        fi
+        index=$((highest + 1))
     fi
-
-    # Paths for the two new shortcuts
-    new_shortcut1="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom$index/"
-    new_shortcut2="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom$((index + 1))/"
-
-    # Build the updated shortcuts array
-    shortcuts_to_add=""
-
-    if [ "$skip_on" -eq 0 ]; then
-        shortcuts_to_add="'$new_shortcut1'"
-    fi
-
-    if [ "$skip_off" -eq 0 ]; then
-        if [ -n "$shortcuts_to_add" ]; then
-            shortcuts_to_add="$shortcuts_to_add, '$new_shortcut2'"
-        else
-            shortcuts_to_add="'$new_shortcut2'"
-        fi
-    fi
-
-    # Combine with existing shortcuts
-    if echo "$current_shortcuts" | grep -q "^\[\]$"; then
-        # Array is empty
-        updated_shortcuts="[$shortcuts_to_add]"
-    else
-        # Array has existing items
-        # Remove the closing bracket and add new shortcuts
-        existing_items=$(echo "$current_shortcuts" | sed 's/^\[//' | sed 's/\]$//')
-        if [ -n "$shortcuts_to_add" ]; then
-            updated_shortcuts="[$existing_items, $shortcuts_to_add]"
-        else
-            updated_shortcuts="$current_shortcuts"
-        fi
-    fi
-
-    # Print updated_shortcuts for debugging
-    echo "Updated shortcuts: $updated_shortcuts"
-
-    # Apply the updated shortcuts array for the specified user
-    sudo -u "$USER_TO_ALLOW" gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "$updated_shortcuts"
-
-    # Add the first shortcut (Killswitch On) if it does not exist
-    if [ "$skip_on" -eq 0 ]; then
-        sudo -u "$USER_TO_ALLOW" gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$new_shortcut1" name 'Killswitch On'
-        sudo -u "$USER_TO_ALLOW" gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$new_shortcut1" command "sudo /usr/local/bin/killswitch-on.sh"
-        sudo -u "$USER_TO_ALLOW" gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$new_shortcut1" binding '<Control><Super>n'
-        echo "Shortcut 'Killswitch On' created: Ctrl+Super+N"
-    fi
-
-    # Add the second shortcut (Killswitch Off) if it does not exist
-    if [ "$skip_off" -eq 0 ]; then
-        sudo -u "$USER_TO_ALLOW" gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$new_shortcut2" name 'Killswitch Off'
-        sudo -u "$USER_TO_ALLOW" gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$new_shortcut2" command "sudo /usr/local/bin/killswitch-off.sh"
-        sudo -u "$USER_TO_ALLOW" gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$new_shortcut2" binding '<Control><Super>f'
-        echo "Shortcut 'Killswitch Off' created: Ctrl+Super+F"
-    fi
-
-    # Verification - show the final state
-    echo "Final shortcuts list:"
-    sudo -u "$USER_TO_ALLOW" gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings
 fi
 
-# Completion message, main script can continue executing
+echo "Starting with index: $index"
+
+new_paths=""
+shortcut1_index=""
+shortcut2_index=""
+
+if [ "$skip_on" -eq 0 ]; then
+    shortcut1_index=$index
+    new_paths="'/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom${index}/'"
+    index=$((index + 1))
+fi
+
+if [ "$skip_off" -eq 0 ]; then
+    shortcut2_index=$index
+    if [ -n "$new_paths" ]; then
+        new_paths="$new_paths, '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom${index}/'"
+    else
+        new_paths="'/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom${index}/'"
+    fi
+fi
+
+if [ "$current" = "@as []" ] || [ "$current" = "[]" ]; then
+    new_list="[$new_paths]"
+else
+    existing=$(echo "$current" | sed 's/@as //' | sed 's/^\[//' | sed 's/\]$//')
+    if [ -n "$existing" ]; then
+        new_list="[$existing, $new_paths]"
+    else
+        new_list="[$new_paths]"
+    fi
+fi
+
+echo "New shortcuts list: $new_list"
+if [ -n "$new_paths" ]; then
+    echo "Setting shortcuts list..."
+    run_gsettings gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "$new_list"
+    
+    if [ $? -eq 0 ]; then
+        echo "List updated successfully"
+        sleep 1
+        if [ "$skip_on" -eq 0 ] && [ -n "$shortcut1_index" ]; then
+            echo "Creating Killswitch On shortcut at index $shortcut1_index..."
+            run_gsettings gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom${shortcut1_index}/" name "Killswitch On"
+            run_gsettings gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom${shortcut1_index}/" command "sudo /usr/local/bin/killswitch-on.sh"
+            run_gsettings gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom${shortcut1_index}/" binding "<Control><Super>n"
+            echo "✅ Killswitch On created: Ctrl+Super+N"
+        fi
+        if [ "$skip_off" -eq 0 ] && [ -n "$shortcut2_index" ]; then
+            echo "Creating Killswitch Off shortcut at index $shortcut2_index..."
+            run_gsettings gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom${shortcut2_index}/" name "Killswitch Off"
+            run_gsettings gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom${shortcut2_index}/" command "sudo /usr/local/bin/killswitch-off.sh"
+            run_gsettings gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom${shortcut2_index}/" binding "<Control><Super>f"
+            echo "✅ Killswitch Off created: Ctrl+Super+F"
+        fi
+        sleep 1
+        echo "Final verification:"
+        final_shortcuts=$(run_gsettings gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings)
+        echo "Final shortcuts: $final_shortcuts"
+        
+    else
+        echo "❌ Error: Failed to set shortcuts list"
+    fi
+else
+    echo "No new shortcuts to create."
+fi
+
 echo "Shortcuts processed."
 
 # --- Printing instructions ---
