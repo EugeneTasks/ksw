@@ -252,8 +252,6 @@ else
     fi
 fi
 
-echo "Starting with index: $index"
-
 new_paths=""
 shortcut1_index=""
 shortcut2_index=""
