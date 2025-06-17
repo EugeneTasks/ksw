@@ -203,15 +203,24 @@ if ! grep -q "down /etc/openvpn/vpn-disconnected.sh" "$OVPN_FILE"; then
     echo "The 'down' directive has been added to your .ovpn file to track connection drops."
 fi
 
-
+USER_TO_ALLOW=$(who | awk '{print $1}' | head -n 1)
 # --- Printing instructions ---
 INSTRUCTIONS="\n\n🎉 Installation complete! 🎉\n
-Three scripts have been created:
+Five scripts have been created:
 1. /usr/local/bin/killswitch-on.sh - to activate the protection.
 2. /usr/local/bin/killswitch-off.sh - to deactivate the protection.
 3. /usr/local/bin/killswitch-notify.sh - to send a notification about the Kill Switch status.
 4. /etc/openvpn/vpn-disconnected.sh - to send a notification on connection drop (called automatically).
 5. Systemd services have been created to run the Kill Switch on boot and send notifications (killswitch.service, killswitch-notify.service).
+
+Two services have been created:
+1. /etc/systemd/system/killswitch.service - to enable the Kill Switch on boot.
+2. /etc/systemd/system/killswitch-notify.service - to send notifications about the Kill Switch status after boot.
+
+Three rules have been added to the sudoers file to allow the user to run the scripts without a password:
+$USER_TO_ALLOW ALL=NOPASSWD: /usr/local/bin/killswitch-on.sh
+$USER_TO_ALLOW ALL=NOPASSWD: /usr/local/bin/killswitch-off.sh
+$USER_TO_ALLOW ALL=NOPASSWD: /etc/openvpn/vpn-disconnected.sh
 
 --- How to use ---
 1. Reconnect to your VPN using the aforementioned '$OVPN_FILE' file, which has been modified by this script.
