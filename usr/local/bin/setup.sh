@@ -6,11 +6,24 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# Check if ufw and libnotify-bin are installed
-if ! command -v ufw &> /dev/null || ! command -v notify-send &> /dev/null; then
-    echo "UFW or libnotify-bin are not installed. Installing..."
+#Installing missing packages
+packages=(ufw libnotify-bin dbus gnome-session gnome-shell dbus-x11 notification-daemon dunst)
+
+missing_packages=false
+
+for package in "${packages[@]}"; do
+    if ! dpkg -s "$package" &> /dev/null; then
+        echo "Package $package is not installed."
+        missing_packages=true
+    fi
+done
+
+if [ "$missing_packages" = true ]; then
+    echo "Installing missing packages..."
     apt-get update
-    apt-get install -y ufw libnotify-bin dbus gnome-session gnome-shell dbus-x11 notification-daemon dunst
+    apt-get install -y "${packages[@]}"
+else
+    echo "All packages are already installed."
 fi
 
 # Prompt for the path to the .ovpn file
