@@ -115,6 +115,7 @@ else
     echo "Could not determine the sudo user. Sudoers rules will not be changed."
 fi
 
+
 # --- Creating the Kill Switch On script ---
 cat > /usr/local/bin/killswitch-on.sh << EOL
 #!/bin/bash
