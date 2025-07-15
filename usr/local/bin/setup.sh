@@ -188,12 +188,12 @@ EOL
 # --- Creating the Interactive VPN Monitor Script ---
 cat > /usr/local/bin/vpn-monitor.sh << 'EOL'
 #!/bin/bash
-
 CHECK_HOST="1.1.1.1"
 TUN_INTERFACE="tun0"
 CHECK_INTERVAL=5
 PAUSE_MINUTES=5
 SNOOZE_MINUTES=1
+SNOOZE_LIMIT=3
 
 LAST_STATE="UP"
 
@@ -203,25 +203,24 @@ while true; do
     if ping -c 1 -W 3 -I "$TUN_INTERFACE" "$CHECK_HOST" > /dev/null 2>&1; then
         if [ "$LAST_STATE" = "DOWN" ]; then
             echo "$(date): Connection restored."
-            
             ACTIVE_USER=$(loginctl list-sessions --no-legend | awk '/seat0/ {print $3; exit}')
             if [ -n "$ACTIVE_USER" ]; then
                 USER_ID=$(id -u "$ACTIVE_USER")
                 DBUS_ADDRESS="unix:path=/run/user/$USER_ID/bus"
                 STATE_FILE="/run/user/$USER_ID/vpn_monitor.state"
+                SNOOZE_COUNT_FILE="/run/user/$USER_ID/vpn_monitor.snooze_count"
 
                 sudo -u "$ACTIVE_USER" \
                      DBUS_SESSION_BUS_ADDRESS="$DBUS_ADDRESS" \
                      DISPLAY=:0 \
                      notify-send -i network-transmit-receive 'VPN Monitor' 'Connection restored'
-                
                 echo 0 > "$STATE_FILE"
+                echo 0 > "$SNOOZE_COUNT_FILE"
             fi
         fi
         LAST_STATE="UP"
     else
         ACTIVE_USER=$(loginctl list-sessions --no-legend | awk '/seat0/ {print $3; exit}')
-        
         if [ -z "$ACTIVE_USER" ]; then
             sleep "$CHECK_INTERVAL"
             continue
@@ -230,12 +229,21 @@ while true; do
         USER_ID=$(id -u "$ACTIVE_USER")
         DBUS_ADDRESS="unix:path=/run/user/$USER_ID/bus"
         STATE_FILE="/run/user/$USER_ID/vpn_monitor.state"
+        SNOOZE_COUNT_FILE="/run/user/$USER_ID/vpn_monitor.snooze_count"
 
         mkdir -p "$(dirname "$STATE_FILE")"
         [ -f "$STATE_FILE" ] || echo 0 > "$STATE_FILE"
+        [ -f "$SNOOZE_COUNT_FILE" ] || echo 0 > "$SNOOZE_COUNT_FILE"
 
         SNOOZE_UNTIL=$(cat "$STATE_FILE")
         CURRENT_TIME=$(date +%s)
+        SNOOZE_COUNT=$(cat "$SNOOZE_COUNT_FILE")
+
+        if [ "$SNOOZE_COUNT" -ge "$SNOOZE_LIMIT" ]; then
+            LAST_STATE="DOWN"
+            sleep "$CHECK_INTERVAL"
+            continue
+        fi
 
         if [ "$CURRENT_TIME" -gt "$SNOOZE_UNTIL" ]; then
             echo "$(date): Connection lost or still down. Sending notification."
@@ -247,7 +255,9 @@ while true; do
                          --action="pause=Pause for $PAUSE_MINUTES min" \
                          --action="snooze=Snooze for $SNOOZE_MINUTES min" \
                          "VPN Connection Lost!" \
-                         "No response from $CHECK_HOST via $TUN_INTERFACE." 2>/dev/null)
+                         "<b>$(date)</b>
+                          No response from $CHECK_HOST via $TUN_INTERFACE.
+                          <b>Your traffic may not be secure. Avoid sensitive activity.</b>" 2>/dev/null)
 
             case "$ACTION" in
                 "pause")
@@ -258,11 +268,16 @@ while true; do
                 "snooze")
                     NEW_SNOOZE_TIME=$((CURRENT_TIME + SNOOZE_MINUTES * 60))
                     echo "$NEW_SNOOZE_TIME" > "$STATE_FILE"
-                    echo "Notification snoozed for $SNOOZE_MINUTES minute."
+                    NEW_SNOOZE_COUNT=$((SNOOZE_COUNT + 1))
+                    echo "$NEW_SNOOZE_COUNT" > "$SNOOZE_COUNT_FILE"
+                    echo "Notification snoozed for $SNOOZE_MINUTES minute. Snooze count: $NEW_SNOOZE_COUNT"
                     ;;
                 *)
                     NEW_SNOOZE_TIME=$((CURRENT_TIME + SNOOZE_MINUTES * 60))
                     echo "$NEW_SNOOZE_TIME" > "$STATE_FILE"
+                    NEW_SNOOZE_COUNT=$((SNOOZE_COUNT + 1))
+                    echo "$NEW_SNOOZE_COUNT" > "$SNOOZE_COUNT_FILE"
+                    echo "Notification closed. Snooze count: $NEW_SNOOZE_COUNT"
                     ;;
             esac
         fi
