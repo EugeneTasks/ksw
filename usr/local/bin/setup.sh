@@ -129,9 +129,9 @@ echo "Activating VPN Kill Switch..."
 
 # Allow traffic to the VPN server
 ufw allow out to $VPN_SERVER_IP port $VPN_PORT proto $PROTO
-ufw allow out to $VPN_SERVER_IP port $VPN_PORT proto $PROTO
+ufw allow in to $VPN_SERVER_IP port $VPN_PORT proto $PROTO
 ufw allow out on tun0 from any to any
-ufw allow out on wg0 from any to any
+ufw allow in on wg0 from any to any
 
 # Block all other outgoing and incoming traffic
 ufw default deny outgoing
@@ -188,7 +188,7 @@ EOL
 # --- Creating the Interactive VPN Monitor Script ---
 cat > /usr/local/bin/vpn-monitor.sh << 'EOL'
 #!/bin/bash
-CHECK_HOST="1.1.1.1"
+CHECK_HOST="172.17.32.1"
 TUN_INTERFACE="tun0"
 CHECK_INTERVAL=5
 PAUSE_MINUTES=5
