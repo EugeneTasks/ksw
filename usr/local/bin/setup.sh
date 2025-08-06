@@ -7,24 +7,27 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 #Installing missing packages
-packages=(ufw libnotify-bin dbus gnome-session gnome-shell dbus-x11 notification-daemon dunst)
+packages=(ufw libnotify-bin dbus gnome-session gnome-shell dbus-x11 notification-daemon dunst zenity)
 
-missing_packages=false
+# missing_packages=false
 
-for package in "${packages[@]}"; do
-    if ! dpkg -s "$package" &> /dev/null; then
-        echo "Package $package is not installed."
-        missing_packages=true
-    fi
-done
+# for package in "${packages[@]}"; do
+#     if ! dpkg -s "$package" &> /dev/null; then
+#         echo "Package $package is not installed."
+#         missing_packages=true
+#     fi
+# done
 
-if [ "$missing_packages" = true ]; then
-    echo "Installing missing packages..."
-    apt-get update
-    apt-get install -y "${packages[@]}"
-else
-    echo "All packages are already installed."
-fi
+# if [ "$missing_packages" = true ]; then
+#     echo "Installing missing packages..."
+#     apt-get update
+#     apt-get install -y "${packages[@]}"
+# else
+#     echo "All packages are already installed."
+# fi
+
+apt-get update
+apt-get install -y "${packages[@]}"
 
 # Prompt for the path to the .ovpn file
 read -p "Please enter the full path to your .ovpn file: " OVPN_FILE
