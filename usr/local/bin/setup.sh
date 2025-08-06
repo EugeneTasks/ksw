@@ -164,7 +164,7 @@ ufw default allow incoming
 #notify-send -u critical -i network-vpn-offline "Kill Switch Deactivated"
 zenity --warning \
        --title="Kill Switch Deactivated" \
-       --text="All traffic, except for the VPN, is blocked." \
+       --text="All traffic is allowed." \
        --width=300
 echo "Kill Switch deactivated."
 EOL
