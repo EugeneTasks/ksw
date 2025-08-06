@@ -132,9 +132,11 @@ echo "Activating VPN Kill Switch..."
 
 # Allow traffic to the VPN server
 ufw allow out to $VPN_SERVER_IP port $VPN_PORT proto $PROTO
-ufw allow in to $VPN_SERVER_IP port $VPN_PORT proto $PROTO
-ufw allow out on tun0 from any to any
-ufw allow in on wg0 from any to any
+# ufw allow in to $VPN_SERVER_IP port $VPN_PORT proto $PROTO
+ufw allow out on tun0 #from any to any
+ufw allow in on tun0 #from any to any
+ufw allow out on wg0 #from any to any
+ufw allow in on wg0 #from any to any
 
 # Block all other outgoing and incoming traffic
 ufw default deny outgoing
@@ -143,7 +145,12 @@ ufw default deny incoming
 # Enable UFW
 ufw enable
 
-notify-send -u critical -i network-vpn "Kill Switch Activated" "All traffic, except for the VPN, is blocked."
+#notify-send -u critical -i network-vpn "Kill Switch Activated" "All traffic, except for the VPN, is blocked."
+
+zenity --warning \
+       --title="Kill Switch Activated" \
+       --text="All traffic, except for the VPN, is blocked." \
+       --width=300
 echo "Kill Switch activated."
 EOL
 
