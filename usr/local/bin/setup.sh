@@ -144,7 +144,7 @@ ufw default deny incoming
 
 # Enable UFW
 ufw enable
-notify-send -u critical -i network-vpn "Kill Switch Activated" "All traffic, except for the VPN, is blocked."
+#notify-send -u critical -i network-vpn "Kill Switch Activated" "All traffic, except for the VPN, is blocked."
 
 zenity --warning \
        --title="Kill Switch Activated" \
