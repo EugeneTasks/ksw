@@ -213,7 +213,7 @@ LAST_STATE="UP"
 echo "VPN monitoring service started. Interface: $TUN_INTERFACE, Host: $CHECK_HOST"
 
 while true; do
-    if ping -c 1 -W 3 -I "$TUN_INTERFACE" "$CHECK_HOST" > /dev/null 2>&1; then
+    if ping -c 3 -W 5 -I "$TUN_INTERFACE" "$CHECK_HOST" > /dev/null 2>&1; then
         if [ "$LAST_STATE" = "DOWN" ]; then
             echo "$(date): Connection restored."
             ACTIVE_USER=$(loginctl list-sessions --no-legend | awk '/seat0/ {print $3; exit}')
@@ -226,7 +226,10 @@ while true; do
                 sudo -u "$ACTIVE_USER" \
                      DBUS_SESSION_BUS_ADDRESS="$DBUS_ADDRESS" \
                      DISPLAY=:0 \
-                     notify-send -i network-transmit-receive 'VPN Monitor' 'Connection restored'
+                     zenity --notification \
+                            --window-icon="network-transmit-receive" \
+                            --text="VPN Monitor: Connection restored."
+                    # notify-send -i network-transmit-receive 'VPN Monitor' 'Connection restored'
                 echo 0 > "$STATE_FILE"
                 echo 0 > "$SNOOZE_COUNT_FILE"
             fi
@@ -264,13 +267,22 @@ while true; do
             ACTION=$(sudo -u "$ACTIVE_USER" \
                          DBUS_SESSION_BUS_ADDRESS="$DBUS_ADDRESS" \
                          DISPLAY=:0 \
-                         notify-send -u critical -t 15000 \
-                         --action="pause=Pause for $PAUSE_MINUTES min" \
-                         --action="snooze=Snooze for $SNOOZE_MINUTES min" \
-                         "VPN Connection Lost!" \
-                         "<b>$(date)</b>
-                          No response from $CHECK_HOST via $TUN_INTERFACE.
-                          <b>Your traffic may not be secure. Avoid sensitive activity.</b>" 2>/dev/null)
+                         zenity --error \
+                                --title="Потеряно VPN-соединение!" \
+                                --text="<b>$(date)</b>
+                                No response from $CHECK_HOST via $TUN_INTERFACE.
+                                <b>Your traffic may not be secure. Avoid sensitive activity.</b>" \
+                                --add-button="Pause" \
+                                --add-button="Snooze" \
+                                --width=400 \
+                                --timeout=15 2>/dev/null)
+                        #  notify-send -u critical -t 15000 \
+                        #  --action="pause=Pause for $PAUSE_MINUTES min" \
+                        #  --action="snooze=Snooze for $SNOOZE_MINUTES min" \
+                        #  "VPN Connection Lost!" \
+                        #  "<b>$(date)</b>
+                        #   No response from $CHECK_HOST via $TUN_INTERFACE.
+                        #   <b>Your traffic may not be secure. Avoid sensitive activity.</b>" 2>/dev/null)
 
             case "$ACTION" in
                 "pause")
