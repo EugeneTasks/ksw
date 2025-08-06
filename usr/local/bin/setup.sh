@@ -161,7 +161,11 @@ if [ "\$EUID" -ne 0 ]; then echo "Please run with sudo."; exit 1; fi
 echo "Deactivating VPN Kill Switch..."
 ufw default allow outgoing
 ufw default allow incoming
-notify-send -u critical -i network-vpn-offline "Kill Switch Deactivated"
+#notify-send -u critical -i network-vpn-offline "Kill Switch Deactivated"
+zenity --warning \
+       --title="Kill Switch Deactivated" \
+       --text="All traffic, except for the VPN, is blocked." \
+       --width=300
 echo "Kill Switch deactivated."
 EOL
 
