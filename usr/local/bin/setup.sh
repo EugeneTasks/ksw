@@ -220,6 +220,8 @@ while true; do
             if [ -n "$ACTIVE_USER" ]; then
                 USER_ID=$(id -u "$ACTIVE_USER")
                 DBUS_ADDRESS="unix:path=/run/user/$USER_ID/bus"
+                USER_HOME=$(getent passwd "$ACTIVE_USER" | cut -d: -f6)
+                XAUTHORITY_PATH="$USER_HOME/.Xauthority"
                 STATE_FILE="/run/user/$USER_ID/vpn_monitor.state"
                 SNOOZE_COUNT_FILE="/run/user/$USER_ID/vpn_monitor.snooze_count"
 
@@ -245,6 +247,8 @@ while true; do
 
         USER_ID=$(id -u "$ACTIVE_USER")
         DBUS_ADDRESS="unix:path=/run/user/$USER_ID/bus"
+        USER_HOME=$(getent passwd "$ACTIVE_USER" | cut -d: -f6)
+        XAUTHORITY_PATH="$USER_HOME/.Xauthority"
         STATE_FILE="/run/user/$USER_ID/vpn_monitor.state"
         SNOOZE_COUNT_FILE="/run/user/$USER_ID/vpn_monitor.snooze_count"
 
