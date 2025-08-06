@@ -227,7 +227,7 @@ while true; do
                      DBUS_SESSION_BUS_ADDRESS="$DBUS_ADDRESS" \
                      DISPLAY=:0 \
                      zenity --notification \
-                            --window-icon="network-transmit-receive" \
+                            --icon="network-transmit-receive" \
                             --text="VPN Monitor: Connection restored."
                     # notify-send -i network-transmit-receive 'VPN Monitor' 'Connection restored'
                 echo 0 > "$STATE_FILE"
