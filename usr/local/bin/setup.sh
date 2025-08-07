@@ -209,6 +209,15 @@ SNOOZE_MINUTES=1
 SNOOZE_LIMIT=3
 
 LAST_STATE="UP"
+STATE_DIR="$XDG_RUNTIME_DIR"
+
+if [ -z "$STATE_DIR" ] || [ ! -d "$STATE_DIR" ]; then
+    STATE_DIR="$HOME/.local/state/vpn_monitor"
+    mkdir -p "$STATE_DIR"
+fi
+
+STATE_FILE="$STATE_DIR/vpn_monitor.state"
+SNOOZE_COUNT_FILE="$STATE_DIR/vpn_monitor.snooze_count"
 
 echo "VPN monitoring service started. Interface: $TUN_INTERFACE, Host: $CHECK_HOST"
 
@@ -216,43 +225,13 @@ while true; do
     if ping -c 3 -W 5 -I "$TUN_INTERFACE" "$CHECK_HOST" > /dev/null 2>&1; then
         if [ "$LAST_STATE" = "DOWN" ]; then
             echo "$(date): Connection restored."
-            ACTIVE_USER=$(loginctl list-sessions --no-legend | awk '/seat0/ {print $3; exit}')
-            if [ -n "$ACTIVE_USER" ]; then
-                USER_ID=$(id -u "$ACTIVE_USER")
-                DBUS_ADDRESS="unix:path=/run/user/$USER_ID/bus"
-                USER_HOME=$(getent passwd "$ACTIVE_USER" | cut -d: -f6)
-                XAUTHORITY_PATH="$USER_HOME/.Xauthority"
-                STATE_FILE="/run/user/$USER_ID/vpn_monitor.state"
-                SNOOZE_COUNT_FILE="/run/user/$USER_ID/vpn_monitor.snooze_count"
-
-                sudo -u "$ACTIVE_USER" \
-                     DBUS_SESSION_BUS_ADDRESS="$DBUS_ADDRESS" \
-                     DISPLAY=:0 \
-                     zenity --notification \
-                            --icon="network-transmit-receive" \
-                            --text="VPN Monitor: Connection restored."
-                
-                #notify-send -i network-transmit-receive 'VPN Monitor' 'Connection restored'
-                echo 0 > "$STATE_FILE"
-                echo 0 > "$SNOOZE_COUNT_FILE"
-            fi
+            notify-send -i network-transmit-receive 'VPN Monitor' 'Connection restored'
+            echo 0 > "$STATE_FILE"
+            echo 0 > "$SNOOZE_COUNT_FILE"
         fi
         LAST_STATE="UP"
     else
-        ACTIVE_USER=$(loginctl list-sessions --no-legend | awk '/seat0/ {print $3; exit}')
-        if [ -z "$ACTIVE_USER" ]; then
-            sleep "$CHECK_INTERVAL"
-            continue
-        fi
-
-        USER_ID=$(id -u "$ACTIVE_USER")
-        DBUS_ADDRESS="unix:path=/run/user/$USER_ID/bus"
-        USER_HOME=$(getent passwd "$ACTIVE_USER" | cut -d: -f6)
-        XAUTHORITY_PATH="$USER_HOME/.Xauthority"
-        STATE_FILE="/run/user/$USER_ID/vpn_monitor.state"
-        SNOOZE_COUNT_FILE="/run/user/$USER_ID/vpn_monitor.snooze_count"
-
-        mkdir -p "$(dirname "$STATE_FILE")"
+        
         [ -f "$STATE_FILE" ] || echo 0 > "$STATE_FILE"
         [ -f "$SNOOZE_COUNT_FILE" ] || echo 0 > "$SNOOZE_COUNT_FILE"
 
@@ -269,25 +248,13 @@ while true; do
         if [ "$CURRENT_TIME" -gt "$SNOOZE_UNTIL" ]; then
             echo "$(date): Connection lost or still down. Sending notification."
 
-            ACTION=$(sudo -u "$ACTIVE_USER" \
-                         DBUS_SESSION_BUS_ADDRESS="$DBUS_ADDRESS" \
-                         DISPLAY=:0 \
-                         zenity --error \
-                               --title="Потеряно VPN-соединение!" \
-                               --text="<b>$(date)</b>
-                               No response from $CHECK_HOST via $TUN_INTERFACE.
-                               <b>Your traffic may not be secure. Avoid sensitive activity.</b>" \
-                               --add-button="Pause" \
-                               --add-button="Snooze" \
-                               --width=400 \
-                               --timeout=15 2>/dev/null)
-            # notify-send -u critical -t 15000 \
-            # --action="pause=Pause for $PAUSE_MINUTES min" \
-            # --action="snooze=Snooze for $SNOOZE_MINUTES min" \
-            # "VPN Connection Lost!" \
-            # "<b>$(date)</b>
-            # No response from $CHECK_HOST via $TUN_INTERFACE.
-            # <b>Your traffic may not be secure. Avoid sensitive activity.</b>" 2>/dev/null)
+            ACTION=$(notify-send -u critical -t 15000 \
+                --action="pause=Pause for $PAUSE_MINUTES min" \
+                --action="snooze=Snooze for $SNOOZE_MINUTES min" \
+                "VPN Connection Lost!" \
+                "<b>$(date)</b>
+                No response from $CHECK_HOST via $TUN_INTERFACE.
+                <b>Your traffic may not be secure. Avoid sensitive activity.</b>" 2>/dev/null)
 
             case "$ACTION" in
                 "pause")
@@ -313,7 +280,6 @@ while true; do
         fi
         LAST_STATE="DOWN"
     fi
-    
     sleep "$CHECK_INTERVAL"
 done
 EOL
@@ -365,6 +331,8 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOL
 
+mkdir -p "/home/$USER_TO_ALLOW/.config/systemd/user/"
+
 cat > /etc/systemd/system/killswitch-notify.service << EOL
 [Unit]
 Description=Send notification about VPN Kill Switch status
@@ -380,10 +348,10 @@ RemainAfterExit=no
 WantedBy=default.target
 EOL
 
-cat > /etc/systemd/system/vpn-monitor.service << EOL
+cat > /home/$USER_TO_ALLOW/.config/systemd/user/vpn-monitor.service << EOL
 [Unit]
 Description=VPN Connection Monitor with Interactive Notifications
-After=network-online.target
+After=graphical-session.target
 
 [Service]
 ExecStart=/usr/local/bin/vpn-monitor.sh
@@ -391,14 +359,18 @@ Restart=always
 RestartSec=10
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target
 EOL
 
 # Reload and enable the services
 systemctl daemon-reload
 systemctl enable killswitch.service
 systemctl enable killswitch-notify.service
-systemctl enable vpn-monitor.service
+#systemctl enable vpn-monitor.service
+sudo -u "$USER_TO_ALLOW" systemctl --user daemon-reload
+sudo -u "$USER_TO_ALLOW" systemctl --user enable vpn-monitor.service
+echo "User service vpn-monitor has been enabled. It will start on the next login."
+chown "$USER_TO_ALLOW":"$USER_TO_ALLOW" "/home/$USER_TO_ALLOW/.config/systemd/user/vpn-monitor.service"
 
 # --- Modifying the .ovpn file ---
 # Check if the line has already been added
@@ -539,7 +511,7 @@ Two services have been created:
 Three rules have been added to the sudoers file to allow the user to run the scripts without a password:
 $USER_TO_ALLOW ALL=NOPASSWD: /usr/local/bin/killswitch-on.sh
 $USER_TO_ALLOW ALL=NOPASSWD: /usr/local/bin/killswitch-off.sh
-$USER_TO_ALLOW ALL=NOPASSWD: /usr/local/bin/vpn-monitor.sh
+$USER_TO_ALLOW ALL=NOPASSWD: /usr/bin/ping -c 1 -W 3 -I tun0 172.17.32.1
 
 Added shortcuts for the scripts:
 1. Killswitch On: Ctrl+Super+N
