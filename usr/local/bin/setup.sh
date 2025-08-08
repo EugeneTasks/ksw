@@ -252,38 +252,19 @@ while true; do
                          DBUS_SESSION_BUS_ADDRESS="$DBUS_ADDRESS" \
                          DISPLAY=:0 \
                          notify-send -u critical -t 15000 \
-                         --action="pause=Pause for $PAUSE_MINUTES min" \
-                         --action="snooze=Snooze for $SNOOZE_MINUTES min" \
                          "VPN Connection Lost!" \
                          "<b>$(date)</b>
                           No response from $CHECK_HOST via $TUN_INTERFACE.
                           <b>Your traffic may not be secure. Avoid sensitive activity.</b>" 2>/dev/null)
 
-            case "$ACTION" in
-                "pause")
-                    NEW_SNOOZE_TIME=$((CURRENT_TIME + PAUSE_MINUTES * 60))
-                    echo "$NEW_SNOOZE_TIME" > "$STATE_FILE"
-                    echo "Notifications paused for $PAUSE_MINUTES minutes."
-                    ;;
-                "snooze")
-                    NEW_SNOOZE_TIME=$((CURRENT_TIME + SNOOZE_MINUTES * 60))
-                    echo "$NEW_SNOOZE_TIME" > "$STATE_FILE"
-                    NEW_SNOOZE_COUNT=$((SNOOZE_COUNT + 1))
-                    echo "$NEW_SNOOZE_COUNT" > "$SNOOZE_COUNT_FILE"
-                    echo "Notification snoozed for $SNOOZE_MINUTES minute. Snooze count: $NEW_SNOOZE_COUNT"
-                    ;;
-                *)
-                    NEW_SNOOZE_TIME=$((CURRENT_TIME + SNOOZE_MINUTES * 60))
-                    echo "$NEW_SNOOZE_TIME" > "$STATE_FILE"
-                    NEW_SNOOZE_COUNT=$((SNOOZE_COUNT + 1))
-                    echo "$NEW_SNOOZE_COUNT" > "$SNOOZE_COUNT_FILE"
-                    echo "Notification closed. Snooze count: $NEW_SNOOZE_COUNT"
-                    ;;
-            esac
+            NEW_SNOOZE_TIME=$((CURRENT_TIME + SNOOZE_MINUTES * 60))
+            echo "$NEW_SNOOZE_TIME" > "$STATE_FILE"
+            NEW_SNOOZE_COUNT=$((SNOOZE_COUNT + 1))
+            echo "$NEW_SNOOZE_COUNT" > "$SNOOZE_COUNT_FILE"
+            echo "Notification closed. Snooze count: $NEW_SNOOZE_COUNT"
         fi
         LAST_STATE="DOWN"
     fi
-    
     sleep "$CHECK_INTERVAL"
 done
 EOL
